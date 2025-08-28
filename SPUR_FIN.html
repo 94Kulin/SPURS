@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spurious Emissions — Unified Helper (refs + rationale)</title>
+<style>
+  :root{ --bg:#0b0f14; --fg:#e7eef7; --muted:#9bb1c9; --card:#111823; --accent:#5cc8ff;
+         --ok:#37d399; --warn:#ffd166; --bad:#ff6b6b; --shadow:0 10px 30px rgba(0,0,0,.25); --radius:18px; }
+  *{box-sizing:border-box}
+  body{margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;
+       background:var(--bg); color:var(--fg); line-height:1.5}
+  header{position:sticky; top:0; z-index:5; backdrop-filter:saturate(160%) blur(8px);
+         background:linear-gradient(180deg, rgba(11,15,20,.9), rgba(11,15,20,.6));
+         border-bottom:1px solid rgba(255,255,255,.06)}
+  .wrap{max-width:1100px; margin:0 auto; padding:20px}
+  h1{font-size:22px; margin:6px 0 10px; letter-spacing:.2px}
+  p.topnote{margin:0 0 12px; color:var(--muted); font-size:14px}
+  .card{background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius);
+        padding:16px; box-shadow:var(--shadow); margin-bottom:14px}
+  .grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px}
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
+  input, select{width:100%; padding:10px 12px; background:#0b121b; color:var(--fg);
+        border:1px solid rgba(255,255,255,.09); border-radius:12px; outline:none}
+  input:focus, select:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(92,200,255,.15)}
+  .btn{display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px;
+       border:1px solid rgba(255,255,255,.08); background:#0f1724; color:var(--fg); cursor:pointer}
+  .btn.primary{background:var(--accent); color:#00131e; border-color:transparent; font-weight:700}
+  .help{font-size:12px; color:var(--muted)}
+  .outputs{white-space:pre-wrap; background:#081018; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.08);
+           font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px}
+  .pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid rgba(255,255,255,.1)}
+  .pill.ok{background:#143125; color:#a8f3c9; border-color:#1b4c35}
+  .pill.bad{background:#2a1414; color:#ffc6c6; border-color:#4f1f1f}
+  .hr{height:1px; background:linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent); margin:12px 0}
+  .note{background:#0c1520; border:1px dashed rgba(255,255,255,.15); padding:10px 12px; border-radius:12px; font-size:13px; color:var(--muted)}
+  .flex{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .hidden{display:none}
+  /* Info overlay */
+  .overlay{position: fixed;
+  inset: 0;
+  background: rgba(7,10,15,.8);
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  display: none;
+  overflow-y: auto;}
+  .modal{max-width: 900px;
+  margin: 40px auto;
+  background: #0f1724;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 20px;}
+  .modal h2{margin:0 0 8px; font-size:20px}
+  .modal h3{margin:14px 0 6px; font-size:16px}
+  .modal p, .modal li{color:#cbd5e1; font-size:14px}
+  .modal code{background:#0b121b; padding:0 6px; border-radius:6px; border:1px solid rgba(255,255,255,.08)}
+  .closebar{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px}
+  .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; background:#0e1621; padding:1px 6px; border-radius:6px; border:1px solid rgba(255,255,255,.1)}
+  .refs{font-size:12px; color:#9bb1c9}
+  ul{margin:6px 0 10px 20px}
+</style>
+
+<style>
+  /* ---------- THEME TOKENS (aligned with SPAN_S1) ---------- */
+  :root{
+    /* Light defaults */
+    --bg:#f3f6fb; --card:#ffffff; --panel:#f9fbff; --ink:#2b2f36; --muted:#6a778f;
+    --accent:#2f7ed8; --accent-ink:#ffffff; --headline:#1f4f82;
+    --border:#d6deea; --line:#e7eef8; --shadow:0 1px 0 rgba(16,36,94,.06), 0 8px 24px rgba(16,36,94,.05);
+    --ok:#1f9e67; --warn:#b58900; --bad:#b00020;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --sans: "Segoe UI", Tahoma, Arial, system-ui, -apple-system, Roboto, "Noto Sans", "Helvetica Neue", sans-serif;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1420; --card:#141b2b; --panel:#0f1a2c; --ink:#e7efff; --muted:#9bb1d1;
+    --accent:#5aa1ff; --accent-ink:#0a1222; --headline:#a7c6ff;
+    --border:#253250; --line:#223150; --shadow:0 1px 0 rgba(0,0,0,.6), 0 8px 24px rgba(0,0,0,.35);
+    --ok:#37d399; --warn:#ffd166; --bad:#ff6b6b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1420; --card:#141b2b; --panel:#0f1a2c; --ink:#e7efff; --muted:#9bb1d1;
+      --accent:#5aa1ff; --accent-ink:#0a1222; --headline:#a7c6ff;
+      --border:#253250; --line:#223150; --shadow:0 1px 0 rgba(0,0,0,.6), 0 8px 24px rgba(0,0,0,.35);
+      --ok:#37d399; --warn:#ffd166; --bad:#ff6b6b;
+    }
+  }
+
+  /* ---------- BASE ---------- */
+  *{box-sizing:border-box}
+  html, body { height: 100%; }
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.5;
+  }
+
+  /* Header */
+  header#styledHeader{
+    position:sticky; top:0; z-index:9999; backdrop-filter:saturate(160%) blur(8px);
+    background:linear-gradient(180deg, color-mix(in oklab, var(--card) 70%, transparent), color-mix(in oklab, var(--card) 20%, transparent));
+    border-bottom:1px solid var(--border);
+  }
+  .wrap{max-width:1100px; margin:0 auto; padding:12px 20px}
+  h1.appTitle{font-size:20px; margin:6px 0 6px; letter-spacing:.2px; color:var(--headline)}
+
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:12px}
+  .topright{display:flex; align-items:center; gap:8px}
+
+  /* Cards & layout */
+  .card{
+    background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:16px; box-shadow:var(--shadow); margin-bottom:14px;
+  }
+  .grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px}
+  .flex{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .hr{height:1px; background:linear-gradient(90deg, transparent, var(--line), transparent); margin:12px 0}
+
+  /* Labels, help text */
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
+  .help{font-size:12px; color:var(--muted)}
+
+  /* Inputs / selects */
+  input, select, textarea, button{
+    font-family:inherit; font-size:inherit;
+  }
+  input, select, textarea{
+    width:100%; padding:10px 12px; background:var(--panel); color:var(--ink);
+    border:1px solid var(--border); border-radius:10px; outline:none;
+  }
+  input:focus, select:focus, textarea:focus{border-color:#b5c9ea; box-shadow:0 0 0 3px rgba(47,126,216,.14)}
+  :root[data-theme="dark"] input:focus, :root[data-theme="dark"] select:focus, :root[data-theme="dark"] textarea:focus{border-color:#3c5ea0; box-shadow:0 0 0 3px rgba(90,161,255,.18)}
+
+  /* Buttons */
+  .btn{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px;
+       border:1px solid var(--border); background:var(--panel); color:var(--ink); cursor:pointer; text-decoration:none}
+  .btn.primary{background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:700}
+  .btn.secondary{background:var(--panel); color:var(--ink)}
+  .btn:hover{filter:brightness(1.03)}
+
+  /* Pills */
+  .pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid var(--border); color:var(--muted)}
+  .pill.ok{background:color-mix(in oklab, var(--ok) 15%, transparent); color:var(--ok); border-color:color-mix(in oklab, var(--ok) 40%, var(--border))}
+  .pill.bad{background:color-mix(in oklab, var(--bad) 15%, transparent); color:var(--bad); border-color:color-mix(in oklab, var(--bad) 40%, var(--border))}
+
+  /* Monospace outputs */
+  .outputs{
+    white-space:pre-wrap; background:var(--panel); padding:12px; border-radius:10px;
+    border:1px solid var(--border); font-family:var(--mono); font-size:13px; color:var(--ink)
+  }
+
+  /* Notes */
+  .note{background:var(--panel); border:1px dashed var(--border); padding:10px 12px; border-radius:10px; font-size:13px; color:var(--muted)}
+
+  /* Overlay / modal (Info) */
+  .overlay{position:fixed; inset:0; background:rgba(0,0,0,.35); backdrop-filter:blur(6px); z-index:50; display:none; overflow-y:auto;}
+  .modal{
+    max-width:900px; margin:40px auto; background:var(--card); border:1px solid var(--border);
+    border-radius:14px; box-shadow:var(--shadow); padding:20px; color:var(--ink)
+  }
+  .modal h2{margin:0 0 8px; font-size:20px; color:var(--headline)}
+  .modal h3{margin:14px 0 6px; font-size:16px; color:var(--headline)}
+  .modal p, .modal li{color:var(--ink); font-size:14px}
+  .modal code{background:var(--panel); padding:0 6px; border-radius:6px; border:1px solid var(--border); color:var(--ink)}
+  .closebar{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px}
+  .kbd{font-family:var(--mono); font-size:12px; background:var(--panel); padding:1px 6px; border-radius:6px; border:1px solid var(--border); color:var(--ink)}
+
+  /* Small screens */
+  @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+</style>
+
+</head>
+<body>
+
+<header id="styledHeader">
+  <div class="wrap">
+    <div class="topbar">
+      
+      <div class="topright"><button id="infoBtn" class="btn small">Info / References</button>
+
+        <button id="themeToggle" class="btn secondary" title="Switch theme">🌙</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+
+
+<main class="wrap">
+  <section class="card">
+    <div class="grid">
+      <div>
+        <label>Center frequency(ies) CF (MHz) — one or many (comma / space / newline / semicolon)</label>
+        <input id="cfs" type="text" placeholder="e.g., 11562.5  (or 17740, 17961.5, 18183)">
+        <span class="help">Enter a single CF for a one‑point run, or multiple CFs separated by commas, spaces, new lines, or semicolons.</span>
+      </div>
+      <div>
+        <label>Bandwidth (standard)</label>
+        <select id="bwstd">
+          <optgroup label="ETSI">
+            <option>1.25 MHz ETSI</option>
+            <option>1.75 MHz ETSI</option>
+            <option>2.5 MHz ETSI</option>
+            <option>3.5 MHz ETSI</option>
+            <option>5 MHz ETSI</option>
+            <option>7 MHz ETSI</option>
+            <option>10 MHz ETSI</option>
+            <option>14 MHz ETSI</option>
+            <option>20 MHz ETSI</option>
+            <option>28 MHz ETSI</option>
+            <option>40 MHz ETSI</option>
+            <option>56 MHz ETSI</option>
+            <option>60 MHz ETSI</option>
+            <option>112 MHz ETSI</option>
+          </optgroup>
+          <optgroup label="FCC">
+            <option>5 MHz FCC</option>
+            <option>10 MHz FCC</option>
+            <option>15 MHz FCC</option>
+            <option>20 MHz FCC</option>
+            <option>25 MHz FCC</option>
+            <option>30 MHz FCC</option>
+            <option>40 MHz FCC</option>
+            <option>50 MHz FCC</option>
+            <option>60 MHz FCC</option>
+            <option>75 MHz FCC</option>
+            <option>80 MHz FCC</option>
+            <option>100 MHz FCC</option>
+          </optgroup>
+        </select>
+        <span class="help">AES variants have identical RF width and are omitted for clarity.</span>
+      </div>
+      <div id="fcc_pout_block" class="hidden">
+        <label>FCC only — TX Mean Output Power (dBm)</label>
+        <input id="fcc_pout" type="number" step="0.01" placeholder="e.g., 30">
+      </div>
+      <div id="fcc_offsets_block" class="hidden">
+        <label>FCC only — Offsets to evaluate (% from center)</label>
+        <input id="fcc_offsets" type="text" value="50,100,150,200,250,300,400">
+      </div>
+    </div>
+    <div class="hr"></div>
+    <div class="flex">
+      <button class="btn primary" id="run">Run</button>
+      <span class="help">Logic auto-routes to ETSI spurious plan or FCC mask+spurious.</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="outputs" id="out">—</div>
+  </section>
+
+  
+  <section class="card">
+    <details id="calcPanel">
+      <summary style="cursor:pointer; outline:none;"><strong>Show calculation steps</strong> (expand to see formulas & numeric derivations)</summary>
+      <pre id="calc" style="white-space:pre-wrap; margin-top:12px;">—</pre>
+    </details>
+  </section>
+<section class="card note">
+    <div><strong>Reference:</strong> ETSI EN 302 217‑2 (spurious via CEPT/ERC Rec. 74‑01) and FCC 47 CFR §101.111 (digital mask and >250% spurious).</div>
+  </section>
+</main>
+
+<!-- Info overlay -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="closebar">
+      <h2>Info & References</h2>
+      <button id="closeInfo" class="btn small">Close <span class="kbd">Esc</span></button>
+    </div>
+
+    <h3>What this tool calculates</h3>
+    <ul>
+      <li><strong>ETSI/ERC:</strong> Spurious domain boundaries at CF ± 250%·BW; Fa/Fb/Fc/Fd offsets; stepwise sweep segments with RBW/VBW; absolute spurious limits (−50 dBm ≤ 21.2 GHz, −30 dBm &gt; 21.2 GHz) in 1 MHz RBW.</li>
+      <li><strong>FCC:</strong> Digital emission mask attenuation for 50–250% offsets (per §101.111(a)(2)) and &gt;250% spurious attenuation (43 + 10·log10(P[W]) capped at 80 dB) with −13 dBm/1 MHz floor.</li>
+    </ul>
+
+    <h3>Where each rule comes from (section references)</h3>
+    <p class="refs">
+      • <strong>ETSI EN 302 217‑2 V3.4.1, Clause 4.2.5</strong> — Transmitter unwanted emissions in the spurious domain.<br>
+      • <strong>ERC/REC 74‑01 Annex 1, Tables 3 &amp; 4</strong> — Spurious domain boundaries, RBW steps, absolute limits.<br>
+      • <strong>FCC §101.111(a)(2), (a)(3)</strong> — Digital modulation masks and spurious emission attenuation &amp; floor.
+    </p>
+
+    <h3>Minimal measurement recipe (field cheat‑sheet)</h3>
+    <ol>
+      <li>Pick three CFs: <em>bottom, middle, top</em> of your tuning range. Set TX to maximum mean output power.</li>
+      <li>Insert external attenuation so analyzer input is safe (no overload). Set detector to <em>average (RMS)</em>.</li>
+      <li>Set VBW ≈ 10×RBW. Use the sweep segments the tool prints:
+        <ul>
+          <li>Below 1 GHz: 30 MHz→500 MHz, then 500→1000 MHz at 100 kHz RBW.</li>
+          <li>Near CF: follow Fa/Fb/Fc/Fd sub‑ranges with RBW 1 MHz → 100 kHz → 10 kHz → 1 kHz (and 0.3 kHz if listed) up to the ±250%·BW boundary.</li>
+          <li>Beyond boundary: 1 MHz RBW, up to 21.2 GHz and on to the upper stop (2nd harmonic or 26/40 GHz per ERC table).</li>
+        </ul>
+      </li>
+      <li><strong>Compare to limits:</strong>
+        <ul>
+          <li><strong>ETSI:</strong> −50 dBm/1 MHz (≤21.2 GHz) or −30 dBm/1 MHz (&gt;21.2 GHz) for every spur in the spurious domain.</li>
+          <li><strong>FCC:</strong> Verify mask 50–250% (RBW 4 kHz &lt;15 GHz; 1 MHz ≥15 GHz) and ensure &gt;250% spurs ≤ max(−13 dBm/1 MHz, Pout − [43+10·log10(P[W])]).</li>
+        </ul>
+      </li>
+      <li>Capture screenshots/logs for each segment; repeat for bottom/mid/top CFs.</li>
+    </ol>
+
+    <h3>Assumptions & scope (read before use)</h3>
+    <ul>
+      <li>Applies to point‑to‑point microwave Fixed Service radios (no BWA, no terminal‑station relaxations, no AAS/TRP, no carrier aggregation).</li>
+      <li>Channel bandwidths ≤ ~112 MHz typical for 6–42 GHz; <em>large‑CS special rules</em> in ERC (CS &gt; 500 MHz) are intentionally not applied.</li>
+      <li>ETSI side: Only <em>spurious domain</em> per ERC (no ETSI out‑of‑band mask in immediate adjacent channels).</li>
+      <li>FCC side: Digital mask per §101.111(a)(2); requires <em>Pout</em> (mean TX output power at the RF port).</li>
+      <li>Analyzer settings assumed: Average detector; RBW/VBW as printed; adequate attenuation to avoid overload; manual instrument control.</li>
+      <li>All spurious limits are referenced to the standard RBW (ETSI: 1 MHz in spurious; FCC: 4 kHz or 1 MHz as applicable). The tool normalizes when comparing measured data.</li>
+    </ul>
+
+    <h3>Why these assumptions?</h3>
+    <ul>
+      <li><strong>Fixed Service radios only:</strong> ETSI EN 302 217‑2 and FCC §101.111 target point‑to‑point microwave links. BWA, terminal stations, AAS/TRP and aggregation use different limit frameworks.</li>
+      <li><strong>CS ≤ 112&nbsp;MHz:</strong> Typical for 6–42&nbsp;GHz microwave. ERC’s “large CS &gt; 500&nbsp;MHz” fallback applies to very wide systems (e.g., multi‑GHz E‑band), not your radios.</li>
+      <li><strong>ETSI spurious domain only:</strong> Clause 4.2.5 routes spurious domain to ERC 74‑01. Adjacent‑channel (OOB) masks are outside this tool’s scope.</li>
+      <li><strong>FCC needs Pout:</strong> §101.111 attenuation is relative to transmitter mean output power; absolute floor is −13&nbsp;dBm/1&nbsp;MHz.</li>
+      <li><strong>Analyzer setup is assumed:</strong> Average detector and RBW/VBW per standard are required for valid, repeatable results; external attenuation prevents overload.</li>
+      <li><strong>Standard‑RBW normalization:</strong> Limits are defined in specific RBWs (ETSI 1&nbsp;MHz; FCC 4&nbsp;kHz/1&nbsp;MHz); normalization lets you compare any measured RBW to the standard.</li>
+    </ul>
+
+    <p class="refs"><em>Tip:</em> Keep this info open while testing. Use <span class="kbd">Ctrl</span>+<span class="kbd">F</span> to find “ETSI”, “FCC”, “RBW”, or “Fa/Fb/Fc/Fd”.</p>
+  </div>
+</div>
+
+<script>
+// Utils
+const log10 = (x)=> Math.log(x)/Math.LN10;
+const dBm_to_W = (dBm)=> Math.pow(10, (dBm-30)/10);
+function fmtGHz(x){ return Number.isFinite(x)? x.toFixed(4) : '—'; }
+function fmtMHz(x){ return Number.isFinite(x)? x.toFixed(3) : '—'; }
+function fmt(x, d=2){ return Number.isFinite(x)? x.toFixed(d) : '—'; }
+function bwNormalize(level_dBm, from_Hz, to_Hz){ return level_dBm + 10*log10(to_Hz/from_Hz); }
+
+function parseBWStd(text){
+  const bw = parseFloat(text); // MHz at start
+  const std = text.toUpperCase().includes("FCC")? "FCC" : "ETSI";
+  return {bw_MHz:bw, std};
+}
+
+function lowerStartAuto(cf_GHz){ return (cf_GHz*1000 >= 300)? 0.03 : 0.009; }
+function upperStopAuto(cf_GHz){
+  if(cf_GHz < 0.1) return 1;
+  if(cf_GHz >= 0.1 && cf_GHz < 0.3) return cf_GHz*10;
+  if(cf_GHz >= 0.3 && cf_GHz < 0.6) return 3;
+  if(cf_GHz >= 0.6 && cf_GHz < 5.2) return 5;
+  if(cf_GHz >= 5.2 && cf_GHz < 13) return 26;
+  if(cf_GHz >= 13 && cf_GHz < 150) return cf_GHz*2;
+  if(cf_GHz >= 150 && cf_GHz <= 300) return 300;
+  return cf_GHz*2;
+}
+function etsiLimit(cf_GHz){ return (cf_GHz <= 21.2)? -50 : -30; }
+
+function offsetsTable(cf_GHz, bw_MHz){
+  const below212 = cf_GHz <= 21.2;
+  let Fa=null, Fb=null, Fc=null, Fd=null;
+  if(below212){
+    if(bw_MHz >= 0.01 && bw_MHz < 1){ Fa=3.5; Fb=7; Fc=14; Fd=70; }
+    else if(bw_MHz >= 1 && bw_MHz < 10){ Fb=14; Fc=28; Fd=70; }
+    else if(bw_MHz >= 10 && bw_MHz <= 14){ Fc=49; Fd=70; }
+    else if(bw_MHz > 14){ Fd=Math.min(5*bw_MHz, 500); }
+  } else {
+    if(bw_MHz >= 1 && bw_MHz < 10){ Fd=70; }
+    else if(bw_MHz >= 10){ Fd=Math.min(5*bw_MHz, 500); }
+  }
+  const CF_MHz = cf_GHz*1000;
+  function absPt(off){ return { minus: CF_MHz - off, plus: CF_MHz + off }; }
+  return {
+    pct250: 2.5*bw_MHz,
+    Fa: Fa? {off:Fa, abs:absPt(Fa)} : null,
+    Fb: Fb? {off:Fb, abs:absPt(Fb)} : null,
+    Fc: Fc? {off:Fc, abs:absPt(Fc)} : null,
+    Fd: Fd? {off:Fd, abs:absPt(Fd)} : null
+  };
+}
+
+function addSegment(list, fromMHz, toMHz, rbw, vbw, note){
+  if(!Number.isFinite(fromMHz) || !Number.isFinite(toMHz)) return;
+  if(toMHz <= fromMHz) return;
+  list.push({from:fromMHz, to:toMHz, rbw, vbw, note});
+}
+
+function buildETSI(cf_GHz, bw_MHz){
+  const lowGHz = lowerStartAuto(cf_GHz);
+  const highGHz = upperStopAuto(cf_GHz);
+  const segments = [];
+  const cfMHz = cf_GHz*1000;
+  const lowerMHz = lowGHz*1000;
+  const upperMHz = highGHz*1000;
+  if(lowerMHz < 500) addSegment(segments, lowerMHz, 500, "100 kHz", "1 MHz", "(ERC split)");
+  if(lowerMHz < 1000) addSegment(segments, Math.max(500, lowerMHz), 1000, "100 kHz", "1 MHz", "(ERC split)");
+  const t = offsetsTable(cf_GHz, bw_MHz);
+  const b250 = cfMHz - 2.5*bw_MHz;
+  const a250 = cfMHz + 2.5*bw_MHz;
+  if(t.Fd){ addSegment(segments, 1000, t.Fd.abs.minus, "1 MHz", "10 MHz", "(to Fd)"); }
+  if(t.Fd && t.Fc){ addSegment(segments, t.Fd.abs.minus, t.Fc.abs.minus, "100 kHz", "1 MHz", "(Fd→Fc)"); }
+  if(t.Fc && t.Fb){ addSegment(segments, t.Fc.abs.minus, t.Fb.abs.minus, "10 kHz", "100 kHz", "(Fc→Fb)"); }
+  if(t.Fb && t.Fa){ addSegment(segments, t.Fb.abs.minus, t.Fa.abs.minus, "1 kHz", "10 kHz", "(Fb→Fa)"); }
+  if(t.Fb && t.Fa) addSegment(segments, t.Fa.abs.minus, b250, "0.3 kHz", "3 kHz", "(Fa→250% CS)");
+  else if(t.Fc && t.Fb) addSegment(segments, t.Fb.abs.minus, b250, "1 kHz", "10 kHz", "(Fb→250% CS)");
+  else if(t.Fd && t.Fc) addSegment(segments, t.Fc.abs.minus, b250, "10 kHz", "100 kHz", "(Fc→250% CS)");
+  else if(t.Fd) addSegment(segments, t.Fd.abs.minus, b250, "100 kHz", "1 MHz", "(Fd→250% CS)");
+  else addSegment(segments, 1000, b250, "1 MHz", "10 MHz", "(to 250% CS)");
+  if(t.Fb && t.Fa) addSegment(segments, a250, t.Fa.abs.plus, "0.3 kHz", "3 kHz", "(250% CS→Fa)");
+  else if(t.Fc && t.Fb) addSegment(segments, a250, t.Fb.abs.plus, "1 kHz", "10 kHz", "(250% CS→Fb)");
+  else if(t.Fd && t.Fc) addSegment(segments, a250, t.Fc.abs.plus, "10 kHz", "100 kHz", "(250% CS→Fc)");
+  else if(t.Fd) addSegment(segments, a250, t.Fd.abs.plus, "100 kHz", "1 MHz", "(250% CS→Fd)");
+  if(t.Fb && t.Fa) addSegment(segments, t.Fa.abs.plus, t.Fb.abs.plus, "1 kHz", "10 kHz", "(Fa→Fb)");
+  if(t.Fc && t.Fb) addSegment(segments, t.Fb.abs.plus, t.Fc.abs.plus, "10 kHz", "100 kHz", "(Fb→Fc)");
+  if(t.Fd && t.Fc) addSegment(segments, t.Fc.abs.plus, t.Fd.abs.plus, "100 kHz", "1 MHz", "(Fc→Fd)");
+  if(t.Fd){ addSegment(segments, t.Fd.abs.plus, Math.min(21200, upperMHz), "1 MHz", "10 MHz", "(from Fd)"); }
+  else { addSegment(segments, a250, Math.min(21200, upperMHz), "1 MHz", "10 MHz", "(from 250% CS)"); }
+  if(upperMHz > 21200) addSegment(segments, 21200, upperMHz, "1 MHz", "10 MHz", "(>21.2 GHz to upper stop)");
+  segments.sort((a,b)=> a.from-b.from);
+  const merged = [];
+  const hardStops = new Set([500, 1000, 21200]); // do not merge across these MHz boundaries (per ERC 74‑01 & lab guide)
+  for(const s of segments){
+    const last = merged[merged.length-1];
+    const isContiguous = last && (last.to === s.from);
+    const sameRBW = last && (last.rbw===s.rbw && last.vbw===s.vbw);
+    const crossesHardStop = last && hardStops.has(last.to) && hardStops.has(s.from);
+    if(isContiguous && sameRBW && !crossesHardStop){
+      last.to = s.to;
+    } else {
+      merged.push({...s});
+    }
+  }
+  return {segments: merged, limits: etsiLimit(cf_GHz), b250, a250, lowerMHz, upperMHz, ...t};
+}
+
+function fccMask(cf_GHz, B_MHz, Pout_dBm, offsets){
+  const below15 = cf_GHz < 15;
+  const results = [];
+  const P_w = dBm_to_W(Pout_dBm);
+  const floor_dBm_1MHz = -13;
+  offsets.forEach(Ppct=>{
+    const P = Ppct;
+    if(P>=50 && P<=250){
+      if(below15){
+        let A = 35 + 0.8*(P-50) + 10*log10(B_MHz);
+        A = Math.max(A, 50); const cap=80; const refBW_Hz=4000;
+        let allowed_dBm_in_RBW = Pout_dBm - Math.min(A,cap);
+        let allowed_1MHz = Math.max(bwNormalize(allowed_dBm_in_RBW, refBW_Hz, 1e6), floor_dBm_1MHz);
+        results.push({region:"50–250% (<15 GHz)", Ppct, A_dB:Math.min(A,cap), refBW_Hz, allowed_dBm_in_RBW, allowed_dBm_1MHz:allowed_1MHz});
+      } else {
+        let A = 11 + 0.4*(P-50) + 10*log10(B_MHz);
+        A = Math.max(A, 11); const cap=56; const refBW_Hz=1e6;
+        let allowed_1MHz = Math.max(Pout_dBm - Math.min(A,cap), floor_dBm_1MHz);
+        results.push({region:"50–250% (≥15 GHz)", Ppct, A_dB:Math.min(A,cap), refBW_Hz, allowed_dBm_in_RBW:allowed_1MHz, allowed_dBm_1MHz:allowed_1MHz});
+      }
+    } else if(P>250){
+      const atten_spur = Math.min(43 + 10*log10(P_w), 80);
+      const allowed_1MHz = Math.max(Pout_dBm - atten_spur, floor_dBm_1MHz);
+      results.push({region:">250% (Spurious)", Ppct, A_dB:atten_spur, refBW_Hz:1e6, allowed_dBm_in_RBW:allowed_1MHz, allowed_dBm_1MHz:allowed_1MHz});
+    } else {
+      results.push({region:"<50% (in‑channel)", Ppct, A_dB:null, refBW_Hz:null, allowed_dBm_in_RBW:null, allowed_dBm_1MHz:null});
+    }
+  });
+  return results;
+}
+
+// UI logic
+const bwstdSel = document.getElementById('bwstd');
+const poutBlock = document.getElementById('fcc_pout_block');
+const offsetsBlock = document.getElementById('fcc_offsets_block');
+function updateFCCVisibility(){
+  const {std} = parseBWStd(bwstdSel.value);
+  const isFCC = (std === "FCC");
+  poutBlock.classList.toggle('hidden', !isFCC);
+  offsetsBlock.classList.toggle('hidden', !isFCC);
+}
+bwstdSel.addEventListener('change', updateFCCVisibility);
+updateFCCVisibility();
+
+document.getElementById('run').addEventListener('click', ()=>{
+  const rawCF = document.getElementById('cfs').value;
+  const cfs = rawCF.split(/[\s,;]+/).map(s => parseFloat(s.trim())/1000).filter(x => isFinite(x));
+  if(cfs.length===0){ document.getElementById('out').textContent = "Enter at least one CF (MHz)."; return; }
+  const {bw_MHz, std} = parseBWStd(bwstdSel.value);
+  const out = [];
+  if(std==="ETSI"){
+    window._calcLog = [];
+    cfs.forEach((cf, i)=>{
+      const res = buildETSI(cf, bw_MHz);
+      // Header
+      out.push(`\n=== ETSI — Channel ${i+1}: CF = ${fmtGHz(cf)} GHz, BW = ${fmt(bw_MHz,3)} MHz ===`);
+      out.push(`Spurious boundary: ±${fmt(2.5*bw_MHz,3)} MHz → [${fmtMHz(res.b250)} ; ${fmtMHz(res.a250)}] MHz`);
+      out.push(`Absolute limit: ${res.limits} dBm/1 MHz (≤21.2 GHz → −50 ; >21.2 GHz → −30)`);
+      out.push(`Sweep segments:`);
+      // Display list
+      res.segments.forEach((s, idx)=> out.push(`${String(idx+1).padStart(2," ")}. ${fmtMHz(s.from)} → ${fmtMHz(s.to)} MHz   RBW ${s.rbw}, VBW ${s.vbw}${s.note? '   ' + s.note : ''}`));
+      // Build calc log for this channel
+      const L = [];
+      L.push(`Channel ${i+1} calculations (traceability):`);
+      L.push(`• CF = ${fmtGHz(cf)} GHz; B = ${fmt(bw_MHz,3)} MHz`);
+      L.push(`• Spurious domain: 30 MHz → 2nd harmonic (ERC/REC 74‑01 Annex 1)`);
+      L.push(`• ±250%·B = ±${fmt(2.5*bw_MHz,3)} MHz ⇒ [${fmtMHz(res.b250)} ; ${fmtMHz(res.a250)}] MHz`);
+      if(res.Fd){ L.push(`• Fd = ±${fmt(res.Fd.off,1)} MHz ⇒ ${fmtMHz(res.Fd.abs.minus)} / ${fmtMHz(res.Fd.abs.plus)} MHz`); }
+      if(res.Fc){ L.push(`• Fc = ±${fmt(res.Fc.off,1)} MHz ⇒ ${fmtMHz(res.Fc.abs.minus)} / ${fmtMHz(res.Fc.abs.plus)} MHz`); }
+      if(res.Fb){ L.push(`• Fb = ±${fmt(res.Fb.off,1)} MHz ⇒ ${fmtMHz(res.Fb.abs.minus)} / ${fmtMHz(res.Fb.abs.plus)} MHz`); }
+      if(res.Fa){ L.push(`• Fa = ±${fmt(res.Fa.off,1)} MHz ⇒ ${fmtMHz(res.Fa.abs.minus)} / ${fmtMHz(res.Fa.abs.plus)} MHz`); }
+      L.push(`• Limits: ≤21.2 GHz → −50 dBm/1 MHz; >21.2 GHz → −30 dBm/1 MHz (ERC/REC 74‑01 Table 4; ETSI EN 302 217‑2 Clause 4.2.5)`);
+      L.push(`• RBW/VBW: 30–1000 MHz → 100 kHz/1 MHz; ≥1 GHz spurious → 1 MHz/10 MHz; near‑CF stepdowns per Table 3 (ERC/REC 74‑01 Annex 1)`);
+      // Per-segment rationale
+      res.segments.forEach((s, idx)=>{
+        let ref = "";
+        const from = s.from, to = s.to;
+        const note = s.note || "";
+        if (to <= 500 || (from >= 30 && to <= 1000)) ref = "ERC split of 30–1 GHz (lab rule), RBW 100 kHz per ERC/REC 74‑01";
+        if (from === 1000 && note.includes("Fd")) ref = "ERC/REC 74‑01 Table 3: 1 MHz RBW region from 1 GHz up to Fd";
+        if (note.includes("Fd→Fc")) ref = "ERC/REC 74‑01 Table 3: 100 kHz RBW between Fd and Fc";
+        if (note.includes("Fc→Fb")) ref = "ERC/REC 74‑01 Table 3: 10 kHz RBW between Fc and Fb";
+        if (note.includes("Fb→Fa")) ref = "ERC/REC 74‑01 Table 3: 1 kHz RBW between Fb and Fa";
+        if (note.includes("Fa→250%") || note.includes("Fb→250%") || note.includes("Fc→250%") || note.includes("Fd→250%") || note.includes("to 250%")) ref = "ERC/REC 74‑01 Table 3: narrow RBW up to ±250%·B boundary";
+        if (note.includes("250% CS→")) ref = "ERC/REC 74‑01 Table 3: narrow RBW just outside ±250%·B boundary";
+        if (note.includes("from Fd")) ref = "ERC/REC 74‑01 Table 3: 1 MHz RBW from Fd to ≤21.2 GHz";
+        if ((from === 21200) || (to === 21200) || note.includes(">21.2")) ref = "ERC/REC 74‑01 Table 4: switch absolute limit to −30 dBm/1 MHz above 21.2 GHz";
+        L.push(`  Seg ${String(idx+1).padStart(2," ")}: ${fmtMHz(s.from)} → ${fmtMHz(s.to)} MHz  RBW ${s.rbw}, VBW ${s.vbw}${note? "  "+note:""}  — ${ref}`);
+      });
+      L.push(`—`);
+      (window._calcLog).push(...L);
+    });
+  } else {
+    const pout = parseFloat(document.getElementById('fcc_pout').value);
+    if(!isFinite(pout)){ document.getElementById('out').textContent = "Enter FCC TX Mean Output Power (dBm)."; return; }
+    const offsets = document.getElementById('fcc_offsets').value.split(',').map(s=> parseFloat(s.trim())).filter(x=> isFinite(x));
+    cfs.forEach((cf, i)=>{
+      const res = fccMask(cf, bw_MHz, pout, offsets);
+      out.push(`\n=== FCC — Channel ${i+1}: CF = ${fmtGHz(cf)} GHz, B = ${fmt(bw_MHz,3)} MHz, Pout = ${fmt(pout,2)} dBm ===`);
+      out.push(`Below 15 GHz → 4 kHz RBW (50–250%); ≥15 GHz → 1 MHz. Beyond 250%: spurious with −13 dBm/1 MHz floor.`);
+      out.push(`Offset%   Region                      Required Atten (dB)   Ref BW     Allowed Level`);
+      out.push(`-------   --------------------------  --------------------  ----------  -------------------------`);
+      res.forEach(r=>{
+        const rbwTxt = r.refBW_Hz? (r.refBW_Hz>=1e6? "1 MHz" : (r.refBW_Hz===4000? "4 kHz" : (r.refBW_Hz+" Hz"))) : "—";
+        let allowedTxt = "—";
+        if(r.allowed_dBm_in_RBW!=null){
+          allowedTxt = (r.refBW_Hz===4000)? `${r.allowed_dBm_in_RBW.toFixed(2)} dBm/4kHz  (≈ ${r.allowed_dBm_1MHz.toFixed(2)} dBm/1MHz)`
+                                           : `${r.allowed_dBm_1MHz.toFixed(2)} dBm/1MHz`;
+        }
+        out.push(`${(r.Ppct+"%").padEnd(8)} ${r.region.padEnd(26)} ${r.A_dB!=null? r.A_dB.toFixed(2).padStart(20): "—".padStart(20)}  ${rbwTxt.padStart(10)}  ${allowedTxt}`);
+      });
+    });
+  }
+  document.getElementById('out').textContent = out.join("\n");
+  document.getElementById('calc').textContent = (window._calcLog || []).join("\n");
+});
+
+// Info overlay controls
+const overlay = document.getElementById('overlay');
+document.getElementById('infoBtn').addEventListener('click', ()=> overlay.style.display='block');
+document.getElementById('closeInfo').addEventListener('click', ()=> overlay.style.display='none');
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') overlay.style.display='none'; });
+</script>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const saved = localStorage.getItem('theme'); // 'light' | 'dark' | null
+  if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+  const btn = document.getElementById('themeToggle');
+  function isDark(){
+    const attr = root.getAttribute('data-theme');
+    if (attr === 'dark') return true;
+    if (attr === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function paint(){
+    if (!btn) return;
+    const dark = isDark();
+    btn.textContent = dark ? '☀️' : '🌙';
+    btn.title = dark ? 'Switch to light' : 'Switch to dark';
+  }
+  paint();
+  if (btn){
+    btn.addEventListener('click', ()=>{
+      const next = isDark() ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      paint();
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
